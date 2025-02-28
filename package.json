@@ -4,6 +4,9 @@
     "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.5.0",
+    "@hono/zod-openapi": "^0.18.4",
+    "ffmpeg-static": "^5.2.0",
     "hono": "^4.7.2"
   },
   "devDependencies": {
