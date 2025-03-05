@@ -1,7 +1,4 @@
-import { Hono } from "hono";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi"
-
-import { spawn } from 'bun'
 
 import { compressVideo } from "../workers/ffmpeg.worker";
 
@@ -35,7 +32,18 @@ export default function() {
     },
     responses: {
       200: {
-        description: "response message",
+        description: "200 ok response message.",
+        content: {
+          'video/mp4': {
+            schema: {
+              type: 'string',
+              format: 'binary'
+            }
+          }
+        }
+      },
+      400: {
+        description: "400 error response message.",
         content: {
           'application/json': {
             schema: z.object({
@@ -49,14 +57,28 @@ export default function() {
   }), async (c) => {
     const { media } = c.req.valid('form')
 
-    const fileName = media[0].name;
-
-    await Bun.write(`tmp/${fileName}`, Buffer.from(await media[0].arrayBuffer()))
-
     try {
-      await compressVideo(fileName)
+      const result = await compressVideo(new Uint8Array(await media[0].arrayBuffer()));
 
-      return c.json({ success: true, message: "File successfully compressed." })
+      if (!result.success) {
+        return c.json({ success: false, message: result.message }, { status: 400 });
+      }
+
+      c.header('Content-Type', 'video/mp4');
+      c.header('Transfer-Encoding', 'chunked');
+      c.status(200);
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          for (const chunk of result.output || []) {
+            controller.enqueue(chunk)
+          }
+
+          controller.close()
+        }
+      })
+
+      return new Response(stream)
     } catch (error) {
       console.error(error)
 
@@ -64,8 +86,6 @@ export default function() {
         success: false,
         message: error instanceof Error ? error.message : "Compression failed."
       })
-    } finally {
-      await Bun.file(`tmp/${fileName}`).delete()
     }
   })
 

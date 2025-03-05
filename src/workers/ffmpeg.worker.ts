@@ -1,21 +1,43 @@
 import { spawn } from 'bun'
 
-export const compressVideo = async (fileName: string) => {
+export const compressVideo = async (arrayBuffer: Uint8Array) => {
   try {
     const ffmpegProcess = spawn([
       'ffmpeg',
-      '-i', `tmp/${fileName}`,
-      '-c:v', 'libx264',        // Video codec (H.264)
-      '-crf', '23',             // Constant Rate Factor (lower = better quality, bigger file)
-      '-preset', 'medium',      // Encoding speed vs compression tradeoff
-      '-threads', '4',          // Use 4 threads for parallel processing
-      '-y',                     // Overwrite output file if it exists
-      `tmp/compressed/compressed_${fileName}` // Output file
+      '-i', 'pipe:0', // Input from stdin (Uint8Array)
+      '-c:v', 'libx264', // H.264 video codec
+      '-crf', '23', // Constant rate factor (0–51, 23 is default)
+      '-preset', 'medium', // Encoding speed (medium is default, ref: https://trac.ffmpeg.org/wiki/Encode/H.264#a2.Chooseapresetandtune)
+      '-b:v', '2500k', // Target bitrate for video, should be adjusted based on input
+      '-maxrate', '3000k', // Maximum bitrate to prevent spikes
+      '-bufsize', '3000k', // Buffer size for bitrate control
+      '-c:a', 'aac', // Audio coded
+      '-b:a', '128k', // audio bitrate
+      '-ar', '44100', // Audio sample rate
+      '-threads', '4', // Use 4 threads for parallel processing
+      '-movflags', 'frag_keyframe+empty_moov', // Fragmented MP4 for streaming
+      '-f', 'mp4', // Output format (MP4)
+      'pipe:1' // Output to stdout for streaming
     ], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
 
-    const stdout = await new Response(ffmpegProcess.stdout).text()
+    ffmpegProcess.stdin.write(arrayBuffer)
+    ffmpegProcess.stdin.end()
+
+    const outputChunks: Uint8Array[] = []
+    const stdoutReader = ffmpegProcess.stdout.getReader()
+
+    while (true) {
+      const { done, value } = await stdoutReader.read()
+
+      if (done) break
+
+      if (value) {
+        outputChunks.push(value)
+      }
+    }
+
     const stderr = await new Response(ffmpegProcess.stderr).text()
 
     const exitCode = await ffmpegProcess.exited
@@ -24,36 +46,8 @@ export const compressVideo = async (fileName: string) => {
       throw new Error(`FFmpeg failed with an exit code ${exitCode}: ${stderr}`)
     }
 
-    return { success: true, message: stdout }
+    return { success: true, message: "Processing complete.", output: outputChunks }
   } catch (error) {
     throw error instanceof Error ? error : new Error(`Error while compressing media: ${error}`)
-  }
-}
-
-export const convertToGif = async (fileName: string) => {
-  try {
-    const ffmpegProcess = spawn([
-      'ffmpeg',
-      '-i', `tmp/${fileName}`,
-      '-vf', 'fps=60;width=320:-1', // Set fps to 60, width to 320px and height to auto
-      '-loop', '0', // 0 loop indefinitely, 1 no loop
-      '-y',
-      `tmp/gif/${fileName}`
-    ], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-
-    const stdout = await new Response(ffmpegProcess.stdout).text()
-    const stderr = await new Response(ffmpegProcess.stderr).text()
-
-    const exitCode = await ffmpegProcess.exited
-
-    if (exitCode !== 0) {
-      throw new Error(`FFmpeg failed with exit code ${exitCode}: ${stderr}`)
-    }
-
-    return { success: true, message: stdout }
-  } catch (error) {
-    throw error instanceof Error ? error : new Error(`Error whille converting media: ${error}`)
   }
 }
