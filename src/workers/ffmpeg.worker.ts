@@ -11,8 +11,8 @@ export const compressVideo = async (arrayBuffer: Uint8Array) => {
       '-b:v', '2500k', // Target bitrate for video, should be adjusted based on input
       '-maxrate', '3000k', // Maximum bitrate to prevent spikes
       '-bufsize', '3000k', // Buffer size for bitrate control
-      '-c:a', 'aac', // Audio coded
-      '-b:a', '128k', // audio bitrate
+      '-c:a', 'aac', // Audio codec
+      '-b:a', '128k', // Audio bitrate
       '-ar', '44100', // Audio sample rate
       '-threads', '4', // Use 4 threads for parallel processing
       '-movflags', 'frag_keyframe+empty_moov', // Fragmented MP4 for streaming
