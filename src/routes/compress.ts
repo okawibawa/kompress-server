@@ -58,27 +58,47 @@ export default function() {
     const { media } = c.req.valid('form')
 
     try {
-      const result = await compressVideo(new Uint8Array(await media[0].arrayBuffer()));
-
-      if (!result.success) {
-        return c.json({ success: false, message: result.message }, { status: 400 });
-      }
+      const result = await compressVideo(media[0].stream())
 
       c.header('Content-Type', 'video/mp4');
       c.header('Transfer-Encoding', 'chunked');
       c.status(200);
 
-      const stream = new ReadableStream({
-        async start(controller) {
-          for (const chunk of result.output || []) {
-            controller.enqueue(chunk)
-          }
+      // const stream = new ReadableStream({
+      //   async start(controller) {
+      //     const reader = result.getReader()
+      //     const { value } = await reader.read()
+      //
+      //     for (const chunk of value || []) {
+      //       controller.enqueue(chunk)
+      //     }
+      //
+      //     controller.close()
+      //   }
+      // })
 
-          controller.close()
+      try {
+        while (true) {
+          const { done, value } = await (result.getReader()).read()
+
+          const stream = new ReadableStream({
+            async start(controller) {
+              if (done) {
+                controller.close()
+                console.log("done", done)
+              }
+
+              if (value) {
+                controller.enqueue()
+              }
+            }
+          })
+
+          return new Response(stream)
         }
-      })
+      } finally {
 
-      return new Response(stream)
+      }
     } catch (error) {
       console.error(error)
 
