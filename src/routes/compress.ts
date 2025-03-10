@@ -64,41 +64,7 @@ export default function() {
       c.header('Transfer-Encoding', 'chunked');
       c.status(200);
 
-      // const stream = new ReadableStream({
-      //   async start(controller) {
-      //     const reader = result.getReader()
-      //     const { value } = await reader.read()
-      //
-      //     for (const chunk of value || []) {
-      //       controller.enqueue(chunk)
-      //     }
-      //
-      //     controller.close()
-      //   }
-      // })
-
-      try {
-        while (true) {
-          const { done, value } = await (result.getReader()).read()
-
-          const stream = new ReadableStream({
-            async start(controller) {
-              if (done) {
-                controller.close()
-                console.log("done", done)
-              }
-
-              if (value) {
-                controller.enqueue()
-              }
-            }
-          })
-
-          return new Response(stream)
-        }
-      } finally {
-
-      }
+      return new Response(result)
     } catch (error) {
       console.error(error)
 
